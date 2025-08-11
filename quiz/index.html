@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BichiGames Quiz - Países y Capitales</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  body {
+    background-color: #000;
+    color: #0f0;
+    font-family: 'Press Start 2P', cursive;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1rem;
+  }
+  #quiz-container {
+    max-width: 480px;
+    width: 100%;
+    text-align: center;
+  }
+  h1 {
+    font-size: 2.8rem;
+    margin-bottom: 2rem;
+    user-select: none;
+  }
+  #question {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    min-height: 60px;
+  }
+  .btn {
+    background: transparent;
+    border: 2px solid #0f0;
+    color: #0f0;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 6px 0;
+    cursor: pointer;
+    width: 100%;
+    font-size: 0.9rem;
+    user-select: none;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .btn:hover:not(:disabled),
+  .btn:focus:not(:disabled) {
+    background-color: #0f0;
+    color: #000;
+    outline: none;
+  }
+  .btn.correct {
+    background-color: #0f0;
+    color: #000;
+    cursor: default;
+  }
+  .btn.wrong {
+    background-color: #f00;
+    color: #000;
+    cursor: default;
+  }
+  .btn:disabled {
+    cursor: default;
+  }
+  #next-btn {
+    margin-top: 2rem;
+    background: transparent;
+    border: 2px solid #0f0;
+    color: #0f0;
+    font-size: 1rem;
+    padding: 10px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  #next-btn:hover:not(:disabled),
+  #next-btn:focus:not(:disabled) {
+    background-color: #0f0;
+    color: #000;
+    outline: none;
+  }
+  #next-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+  #score-container {
+    margin-top: 2rem;
+    font-size: 1.2rem;
+    user-select: none;
+  }
+  @media (max-width: 480px) {
+    h1 {
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+    }
+    .btn {
+      font-size: 0.8rem;
+      padding: 10px;
+    }
+    #next-btn {
+      font-size: 0.9rem;
+      padding: 8px 20px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="quiz-container" role="main" aria-label="Quiz de países y capitales">
+    <h1>BichiGames Quiz</h1>
+    <div id="question" tabindex="0">Cargando preguntas...</div>
+    <div id="answer-buttons"></div>
+    <button id="next-btn" disabled>Próxima</button>
+    <div id="score-container" aria-live="polite"></div>
+  </div>
+
+<script>
+  const questionElement = document.getElementById("question");
+  const answerButtons = document.getElementById("answer-buttons");
+  const nextBtn = document.getElementById("next-btn");
+  const scoreContainer = document.getElementById("score-container");
+
+  let questions = [];
+  let currentQuestionIndex = 0;
+  let score = 0;
+
+  async function loadQuestions() {
+    try {
+      const response = await fetch('questions.json');
+      if (!response.ok) throw new Error("Error cargando preguntas");
+      questions = await response.json();
+      startQuiz();
+    } catch (error) {
+      questionElement.innerText = "No se pudieron cargar las preguntas.";
+      console.error(error);
+    }
+  }
+
+  function startQuiz() {
+    currentQuestionIndex = 0;
+    score = 0;
+    scoreContainer.innerText = "";
+    nextBtn.innerText = "Próxima";
+    showQuestion();
+  }
+
+  function showQuestion() {
+    resetState();
+    const currentQuestion = questions[currentQuestionIndex];
+    questionElement.innerText = currentQuestion.question;
+
+    currentQuestion.answers.forEach(answer => {
+      const button = document.createElement("button");
+      button.innerText = answer.text;
+      button.classList.add("btn");
+      button.dataset.correct = answer.correct;
+      button.addEventListener("click", selectAnswer);
+      answerButtons.appendChild(button);
+    });
+  }
+
+  function resetState() {
+    nextBtn.disabled = true;
+    while (answerButtons.firstChild) {
+      answerButtons.removeChild(answerButtons.firstChild);
+    }
+  }
+
+  function selectAnswer(e) {
+    const selectedBtn = e.target;
+    const correct = selectedBtn.dataset.correct === "true";
+
+    if (correct) {
+      selectedBtn.classList.add("correct");
+      score++;
+    } else {
+      selectedBtn.classList.add("wrong");
+      // Mostrar cuál era la correcta
+      Array.from(answerButtons.children).forEach(btn => {
+        if (btn.dataset.correct === "true") {
+          btn.classList.add("correct");
+        }
+      });
+    }
+    Array.from(answerButtons.children).forEach(btn => {
+      btn.disabled = true;
+    });
+    nextBtn.disabled = false;
+  }
+
+  nextBtn.addEventListener("click", () => {
+    currentQuestionIndex++;
+    if (currentQuestionIndex < questions.length) {
+      showQuestion();
+    } else {
+      showScore();
+    }
+  });
+
+  function showScore() {
+    resetState();
+    questionElement.innerText = "¡Juego terminado!";
+    scoreContainer.innerText = `Obtuviste ${score} de ${questions.length} puntos.`;
+    nextBtn.innerText = "Volver a jugar";
+    nextBtn.disabled = false;
+    nextBtn.onclick = () => {
+      startQuiz();
+      scoreContainer.innerText = "";
+      nextBtn.onclick = null;
+    };
+  }
+
+  loadQuestions();
+</script>
+</body>
+</html>
+
