@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Snake Classic de Bichigames</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Press Start 2P', sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+  }
+  #hud {
+    position: absolute;
+    top: 10px;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+    font-size: 16px;
+  }
+  #hud span {
+    margin: 0 15px;
+  }
+  #record {
+    position: absolute;
+    top: 40px;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+    font-size: 14px;
+    color: #0f0;
+  }
+  canvas {
+    display: block;
+    margin: 60px auto 0 auto;
+    background-color: #000;
+    border: 2px solid #0f0;
+  }
+  #overlay {
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.85);
+    color: #0f0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Press Start 2P', sans-serif;
+    font-size: 20px;
+    z-index: 100;
+    display: none;
+  }
+  #overlay button {
+    margin-top: 20px;
+    padding: 10px 25px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #0f0;
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  #overlay button:hover {
+    background-color: #0c0;
+  }
+</style>
+</head>
+<body>
+  <div id="hud">
+    <span id="score">Puntaje: 0</span>
+    <span id="level">Nivel: 1</span>
+  </div>
+  <div id="record">Récord: 0</div>
+  <canvas id="gameCanvas" width="640" height="480" tabindex="0"></canvas>
+
+  <div id="overlay" role="dialog" aria-modal="true" aria-live="assertive">
+    <div id="overlay-message"></div>
+    <button id="overlay-btn">Reiniciar</button>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const levelEl = document.getElementById("level");
+  const recordEl = document.getElementById("record");
+  const overlay = document.getElementById("overlay");
+  const overlayMsg = document.getElementById("overlay-message");
+  const overlayBtn = document.getElementById("overlay-btn");
+
+  // Config
+  const gridSize = 20;
+  const cols = canvas.width / gridSize; // 32
+  const rows = canvas.height / gridSize; // 24
+  const maxLevel = 5;
+
+  // Web Audio API para sonidos simples
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playSound(freq, duration=100) {
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = "square";
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration / 1000);
+  }
+
+  // Variables juego
+  let snake;
+  let food;
+  let direction;
+  let nextDirection;
+  let score = 0;
+  let level = 1;
+  let speed = 150; // ms por frame
+  let gameState = "playing";
+  let moveTimeout;
+
+  function initGame() {
+    snake = [
+      { x: Math.floor(cols / 2), y: Math.floor(rows / 2) },
+      { x: Math.floor(cols / 2) - 1, y: Math.floor(rows / 2) },
+      { x: Math.floor(cols / 2) - 2, y: Math.floor(rows / 2) }
+    ];
+    direction = 'right';
+    nextDirection = 'right';
+    placeFood();
+    score = 0;
+    level = 1;
+    speed = 150;
+    updateHUD();
+    gameState = "playing";
+    overlay.style.display = "none";
+    canvas.focus();
+    clearTimeout(moveTimeout);
+    moveTimeout = setTimeout(gameLoop, speed);
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = "Puntaje: " + score;
+    levelEl.textContent = "Nivel: " + level;
+    recordEl.textContent = "Récord: " + getRecord();
+  }
+
+  function placeFood() {
+    let valid = false;
+    while (!valid) {
+      food = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+      };
+      valid = !snake.some(s => s.x === food.x && s.y === food.y);
+    }
+  }
+
+  function drawCell(x, y, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x * gridSize, y * gridSize, gridSize - 1, gridSize - 1);
+  }
+
+  function draw() {
+    // Fondo negro
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Dibuja comida (verde claro)
+    drawCell(food.x, food.y, "#0f0");
+
+    // Dibuja serpiente (verde neón)
+    snake.forEach((segment, index) => {
+      const color = index === 0 ? "#0fff0f" : "#00cc00";
+      drawCell(segment.x, segment.y, color);
+    });
+  }
+
+  function moveSnake() {
+    direction = nextDirection;
+
+    const head = { ...snake[0] };
+    switch (direction) {
+      case 'left': head.x--; break;
+      case 'right': head.x++; break;
+      case 'up': head.y--; break;
+      case 'down': head.y++; break;
+    }
+
+    // Chequear colisiones con paredes
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+      gameOver();
+      return;
+    }
+
+    // Chequear colisión consigo misma
+    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    // Comer comida
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      playSound(800, 100);
+      placeFood();
+
+      // Aumenta nivel cada 50 puntos, hasta maxLevel
+      if (score % 50 === 0 && level < maxLevel) {
+        level++;
+        speed = Math.max(50, speed - 20); // más rápido
+        playSound(1200, 150);
+      }
+      updateHUD();
+    } else {
+      snake.pop();
+    }
+  }
+
+  function gameLoop() {
+    if (gameState !== "playing") return;
+    moveSnake();
+    draw();
+    moveTimeout = setTimeout(gameLoop, speed);
+  }
+
+  function gameOver() {
+    gameState = "gameOver";
+    playSound(200, 500);
+    if (score > getRecord()) saveRecord(score);
+    updateHUD();
+    showOverlay("¡Juego terminado!", "Reiniciar", () => {
+      initGame();
+    });
+  }
+
+  // Overlay
+  function showOverlay(message, buttonText, callback) {
+    overlayMsg.textContent = message;
+    overlayBtn.textContent = buttonText;
+    overlay.style.display = "flex";
+    overlayBtn.onclick = () => {
+      overlay.style.display = "none";
+      callback();
+    };
+  }
+
+  // LocalStorage récord
+  function getRecord() {
+    return parseInt(localStorage.getItem("snakeRecord")) || 0;
+  }
+  function saveRecord(newRecord) {
+    localStorage.setItem("snakeRecord", newRecord);
+  }
+
+  // Controles teclado
+  document.addEventListener("keydown", e => {
+    if (gameState !== "playing") return;
+    switch (e.code) {
+      case "ArrowUp":
+      case "KeyW":
+        if (direction !== "down") nextDirection = "up";
+        break;
+      case "ArrowDown":
+      case "KeyS":
+        if (direction !== "up") nextDirection = "down";
+        break;
+      case "ArrowLeft":
+      case "KeyA":
+        if (direction !== "right") nextDirection = "left";
+        break;
+      case "ArrowRight":
+      case "KeyD":
+        if (direction !== "left") nextDirection = "right";
+        break;
+    }
+  });
+
+  // Control táctil simple: deslizar para cambiar dirección
+  let touchStartX = null;
+  let touchStartY = null;
+  const swipeThreshold = 30;
+
+  canvas.addEventListener("touchstart", e => {
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  canvas.addEventListener("touchmove", e => {
+    if (!touchStartX || !touchStartY) return;
+    let touchEndX = e.touches[0].clientX;
+    let touchEndY = e.touches[0].clientY;
+
+    let diffX = touchEndX - touchStartX;
+    let diffY = touchEndY - touchStartY;
+
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      // Horizontal swipe
+      if (diffX > swipeThreshold && direction !== 'left') {
+        nextDirection = 'right';
+        touchStartX = null; touchStartY = null;
+      } else if (diffX < -swipeThreshold && direction !== 'right') {
+        nextDirection = 'left';
+        touchStartX = null; touchStartY = null;
+      }
+    } else {
+      // Vertical swipe
+      if (diffY > swipeThreshold && direction !== 'up') {
+        nextDirection = 'down';
+        touchStartX = null; touchStartY = null;
+      } else if (diffY < -swipeThreshold && direction !== 'down') {
+        nextDirection = 'up';
+        touchStartX = null; touchStartY = null;
+      }
+    }
+  }, { passive: true });
+
+  // Poner foco para capturar teclado
+  canvas.setAttribute('tabindex','0');
+  canvas.focus();
+
+  // Arranca el juego
+  initGame();
+
+})();
+</script>
+
+<footer style="color:#0f0; text-align:center; font-family: 'Press Start 2P', monospace; padding: 10px;">bichigames</footer>
+</body>
+</html>
+
