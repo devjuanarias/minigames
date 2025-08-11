@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Snake de Bichigames POWERUP + FontAwesome</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+/>
+<style>
+  body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    user-select: none;
+    touch-action: none;
+  }
+  #hud {
+    position: absolute;
+    top: 10px;
+    width: 100%;
+    text-align: center;
+    z-index: 15;
+    font-size: 16px;
+  }
+  #hud span {
+    margin: 0 15px;
+  }
+  #record, #history {
+    position: absolute;
+    top: 40px;
+    width: 100%;
+    text-align: center;
+    z-index: 15;
+    font-size: 12px;
+    color: #0f0;
+  }
+  #history {
+    top: 60px;
+    font-size: 10px;
+    color: #0a0;
+  }
+  canvas {
+    display: block;
+    margin: 90px auto 0 auto;
+    background-color: #000;
+    border: 2px solid #0f0;
+    image-rendering: pixelated;
+  }
+  #overlay {
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.85);
+    color: #0f0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 20px;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  #overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #overlay button {
+    margin-top: 20px;
+    padding: 10px 25px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #0f0;
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  #overlay button:hover {
+    background-color: #0c0;
+  }
+  /* Glow en cabeza */
+  .glow {
+    filter: drop-shadow(0 0 4px #0f0);
+  }
+  /* Powerup icons */
+  .powerup-icon i {
+    color: #0f0;
+    font-size: 1.5rem;
+    filter: drop-shadow(0 0 4px #0f0);
+    animation: pulseGlow 1.5s infinite alternate;
+  }
+  @keyframes pulseGlow {
+    from { filter: drop-shadow(0 0 4px #0f0); }
+    to { filter: drop-shadow(0 0 12px #0c0); }
+  }
+</style>
+</head>
+<body>
+  <div id="hud">
+    <span id="score">Puntaje: 0</span>
+    <span id="level">Nivel: 1</span>
+  </div>
+  <div id="record">Récord: 0</div>
+  <div id="history">Historial: -</div>
+  <canvas id="gameCanvas" width="640" height="480" tabindex="0"></canvas>
+
+  <div id="overlay" role="dialog" aria-modal="true" aria-live="assertive">
+    <div id="overlay-message"></div>
+    <button id="overlay-btn">Reiniciar</button>
+  </div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const levelEl = document.getElementById("level");
+  const recordEl = document.getElementById("record");
+  const historyEl = document.getElementById("history");
+  const overlay = document.getElementById("overlay");
+  const overlayMsg = document.getElementById("overlay-message");
+  const overlayBtn = document.getElementById("overlay-btn");
+
+  // Config
+  const gridSize = 20;
+  const cols = canvas.width / gridSize; // 32
+  const rows = canvas.height / gridSize; // 24
+  const maxLevel = 5;
+
+  // Web Audio API para sonidos simples
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playSound(freq, duration=100) {
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = "square";
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration / 1000);
+  }
+  function playSoundVaried(event) {
+    switch(event) {
+      case 'eat': playSound(900, 100); break;
+      case 'powerup': playSound(1400, 120); break;
+      case 'slow': playSound(600, 150); break;
+      case 'life': playSound(1200, 150); break;
+      case 'poison': playSound(300, 300); break;
+      case 'gameover': playSound(200, 600); break;
+      default: playSound(800, 100);
+    }
+  }
+
+  // Variables juego
+  let snake = [];
+  let foods = [];
+  let powerups = [];
+  let particles = [];
+  let directionInput = 'right';
+  let score = 0;
+  let level = 1;
+  let speed = 150;
+  let gameState = "playing";
+
+  // Power-up tipos
+  const POWERUP_TYPES = {
+    DOUBLE: 'double',
+    SLOW: 'slow',
+    LIFE: 'life',
+    POISON: 'poison'
+  };
+
+  // Colores serpiente
+  const snakeColors = { head: "#0fff0f", body: "#00cc00" };
+
+  // Velocidad powerups activos y contadores
+  let activePowerups = {};
+  let powerupTimers = {};
+
+  // Guarda últimos 5 puntajes
+  function saveHistory(score) {
+    let hist = JSON.parse(localStorage.getItem("snakeHistory") || "[]");
+    hist.unshift(score);
+    if (hist.length > 5) hist.pop();
+    localStorage.setItem("snakeHistory", JSON.stringify(hist));
+  }
+  function getHistory() {
+    return JSON.parse(localStorage.getItem("snakeHistory") || "[]");
+  }
+
+  // LocalStorage récord
+  function getRecord() {
+    return parseInt(localStorage.getItem("snakeRecord")) || 0;
+  }
+  function saveRecord(newRecord) {
+    localStorage.setItem("snakeRecord", newRecord);
+  }
+
+  // Coloca comida y powerups evitando la serpiente y ya colocados
+  function placeItem(type = 'food') {
+    let pos, valid;
+    do {
+      pos = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+      };
+      valid = true;
+      // No puede estar en serpiente
+      if (snake.some(seg => seg.x === pos.x && seg.y === pos.y)) {
+        valid = false;
+      }
+      // No puede estar en comidas o powerups
+      if (valid) {
+        if (type === 'food') {
+          if (foods.some(f => f.x === pos.x && f.y === pos.y)) valid = false;
+        } else {
+          if (powerups.some(p => p.x === pos.x && p.y === pos.y)) valid = false;
+        }
+      }
+    } while (!valid);
+
+    if (type === 'food') {
+      foods.push(pos);
+    } else {
+      // Powerups random
+      const keys = Object.values(POWERUP_TYPES);
+      powerups.push({ x: pos.x, y: pos.y, type: keys[Math.floor(Math.random()*keys.length)] });
+    }
+  }
+
+  // Partículas para efecto al comer
+  function createParticles(x, y, color) {
+    for(let i=0; i<15; i++) {
+      particles.push({
+        x: x + gridSize/2,
+        y: y + gridSize/2,
+        dx: (Math.random() - 0.5) * 4,
+        dy: (Math.random() - 0.5) * 4,
+        life: 20,
+        color
+      });
+    }
+  }
+
+  function drawParticles() {
+    particles = particles.filter(p => p.life > 0);
+    particles.forEach(p => {
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.life / 20;
+      ctx.fillRect(p.x, p.y, 3, 3);
+      p.x += p.dx;
+      p.y += p.dy;
+      p.life--;
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  // Dibuja celda con borde para efecto glow si es cabeza
+  function drawCell(x, y, color, glow = false) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x * gridSize, y * gridSize, gridSize - 1, gridSize - 1);
+    if (glow) {
+      ctx.strokeStyle = "#0f0";
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "#0f0";
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(x * gridSize, y * gridSize, gridSize - 1, gridSize - 1);
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  // Pulso animado para comida
+  let pulse = 0;
+  let pulseDirection = 1;
+
+  function draw() {
+    // Fondo negro
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Comida con pulso
+    pulse += 0.05 * pulseDirection;
+    if (pulse > 0.5) pulseDirection = -1;
+    if (pulse < 0) pulseDirection = 1;
+    foods.forEach(f => {
+      ctx.save();
+      ctx.translate(f.x * gridSize + gridSize/2, f.y * gridSize + gridSize/2);
+      let scale = 1 + pulse * 0.3;
+      ctx.scale(scale, scale);
+      ctx.fillStyle = "#0f0";
+      ctx.fillRect(-gridSize/2 + 2, -gridSize/2 + 2, gridSize - 5, gridSize - 5);
+      ctx.restore();
+    });
+
+    // Powerups con iconos FontAwesome
+    powerups.forEach(p => {
+      const iconMap = {
+        double: "\uf1d8", // fa-x2
+        slow: "\uf0e7", // fa-bolt
+        life: "\uf004", // fa-heart
+        poison: "\uf714" // fa-skull-crossbones
+      };
+      const colorMap = {
+        double: "#ff0",
+        slow: "#0ff",
+        life: "#f0f",
+        poison: "#f00"
+      };
+      const icon = iconMap[p.type];
+      const color = colorMap[p.type];
+
+      ctx.font = `${gridSize + 6}px "Font Awesome 6 Free"`;
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(icon, p.x * gridSize + gridSize / 2, p.y * gridSize + gridSize / 2);
+    });
+
+    // Serpiente
+    snake.forEach((seg, idx) => {
+      let glow = (idx === 0);
+      drawCell(seg.x, seg.y, idx === 0 ? snakeColors.head : snakeColors.body, glow);
+    });
+
+    drawParticles();
+  }
+
+  // Movimiento y lógica
+  function moveSnake() {
+    if (gameState !== "playing") return;
+
+    let dir = directionInput;
+
+    const head = { ...snake[0] };
+    switch (dir) {
+      case 'left': head.x--; break;
+      case 'right': head.x++; break;
+      case 'up': head.y--; break;
+      case 'down': head.y++; break;
+    }
+
+    // Chequear colisiones con paredes
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+      gameOver();
+      return;
+    }
+
+    // Colisión consigo misma
+    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+      gameOver();
+      return;
+    }
+
+    snake.unshift(head);
+
+    // Comer comida
+    let ateFood = false;
+    for (let j = 0; j < foods.length; j++) {
+      if (head.x === foods[j].x && head.y === foods[j].y) {
+        ateFood = true;
+        foods.splice(j,1);
+        score += activePowerups[POWERUP_TYPES.DOUBLE] ? 20 : 10;
+        placeItem('food');
+        createParticles(head.x * gridSize, head.y * gridSize, snakeColors.head);
+        playSoundVaried('eat');
+        break;
+      }
+    }
+
+    // Comer powerups
+    for (let j = 0; j < powerups.length; j++) {
+      if (head.x === powerups[j].x && head.y === powerups[j].y) {
+        let p = powerups[j];
+        powerups.splice(j,1);
+        switch(p.type) {
+          case POWERUP_TYPES.DOUBLE:
+            activePowerups[POWERUP_TYPES.DOUBLE] = true;
+            powerupTimers[POWERUP_TYPES.DOUBLE] = 15000;
+            playSoundVaried('powerup');
+            break;
+          case POWERUP_TYPES.SLOW:
+            activePowerups[POWERUP_TYPES.SLOW] = true;
+            powerupTimers[POWERUP_TYPES.SLOW] = 10000;
+            speed += 50; // lento (más alto es más lento)
+            playSoundVaried('slow');
+            break;
+          case POWERUP_TYPES.LIFE:
+            activePowerups[POWERUP_TYPES.LIFE] = true;
+            powerupTimers[POWERUP_TYPES.LIFE] = 15000;
+            score += 10;
+            playSoundVaried('life');
+            break;
+          case POWERUP_TYPES.POISON:
+            activePowerups[POWERUP_TYPES.POISON] = true;
+            powerupTimers[POWERUP_TYPES.POISON] = 15000;
+            score -= 15;
+            playSoundVaried('poison');
+            break;
+        }
+        break;
+      }
+    }
+
+    if (!ateFood) {
+      snake.pop();
+    }
+
+    updateHUD();
+  }
+
+  function updatePowerups(delta) {
+    for (const p in powerupTimers) {
+      powerupTimers[p] -= delta;
+      if (powerupTimers[p] <= 0) {
+        if (p === POWERUP_TYPES.SLOW) speed -= 50;
+        activePowerups[p] = false;
+        powerupTimers[p] = 0;
+      }
+    }
+  }
+
+  // Game Over
+  function gameOver() {
+    gameState = "gameOver";
+    saveHistory(score);
+    if (score > getRecord()) saveRecord(score);
+    showOverlay(`¡Juego terminado! Puntaje final: ${score}`, "Reiniciar", () => {
+      initSnake();
+      placeInitialItems();
+      gameState = "playing";
+      lastFrame = performance.now();
+      update();
+    });
+    playSoundVaried('gameover');
+  }
+
+  // Overlay show/hide
+  function showOverlay(msg, btnText, cb) {
+    overlayMsg.textContent = msg;
+    overlayBtn.textContent = btnText;
+    overlay.classList.add("show");
+    overlayBtn.onclick = () => {
+      overlay.classList.remove("show");
+      cb();
+    };
+  }
+
+  // Manejo input teclado
+  document.addEventListener("keydown", e => {
+    switch(e.code) {
+      case "ArrowUp": if(directionInput !== 'down') directionInput = 'up'; break;
+      case "ArrowLeft": if(directionInput !== 'right') directionInput = 'left'; break;
+      case "ArrowDown": if(directionInput !== 'up') directionInput = 'down'; break;
+      case "ArrowRight": if(directionInput !== 'left') directionInput = 'right'; break;
+    }
+  });
+
+  // Items iniciales
+  function placeInitialItems() {
+    foods = [];
+    powerups = [];
+    for(let i=0; i<5; i++) placeItem('food');
+    for(let i=0; i<2; i++) placeItem('powerup');
+  }
+
+  // Inicializar serpiente
+  function initSnake() {
+    snake = [
+      { x: Math.floor(cols / 2), y: Math.floor(rows / 2) },
+      { x: Math.floor(cols / 2) - 1, y: Math.floor(rows / 2) },
+      { x: Math.floor(cols / 2) - 2, y: Math.floor(rows / 2) }
+    ];
+    directionInput = 'right';
+    score = 0;
+    level = 1;
+    speed = 150;
+    activePowerups = {};
+    powerupTimers = {};
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = `Puntaje: ${score}`;
+    levelEl.textContent = `Nivel: ${level}`;
+    recordEl.textContent = "Récord: " + getRecord();
+    historyEl.textContent = "Historial: " + getHistory().join(", ");
+  }
+
+  // Loop principal
+  let lastFrame = performance.now();
+  function update(time = performance.now()) {
+    if (gameState !== "playing") return;
+    const delta = time - lastFrame;
+    if (delta > speed) {
+      moveSnake();
+      updatePowerups(delta);
+      lastFrame = time;
+    }
+    draw();
+    requestAnimationFrame(update);
+  }
+
+  initSnake();
+  placeInitialItems();
+  updateHUD();
+  update();
+})();
+</script>
+<footer style="color:#0f0; text-align:center; padding:8px; font-size:10px;">bichigames</footer>
+</body>
+</html>
+
