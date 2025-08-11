@@ -12,6 +12,8 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
+    user-select: none;
+    touch-action: none; /* para evitar scroll en táctil */
   }
   #hud {
     position: absolute;
@@ -24,23 +26,75 @@
   #hud span {
     margin: 0 15px;
   }
+  #record {
+    position: absolute;
+    top: 40px;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+    font-size: 14px;
+    color: #0f0;
+  }
   canvas {
     display: block;
     margin: 60px auto 0 auto;
     background-color: #000;
   }
+  #overlay {
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    background: rgba(0,0,0,0.85);
+    color: #0f0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Press Start 2P', sans-serif;
+    font-size: 20px;
+    z-index: 100;
+    display: none;
+  }
+  #overlay button {
+    margin-top: 20px;
+    padding: 10px 25px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #0f0;
+    border: none;
+    border-radius: 6px;
+    color: #000;
+    font-weight: bold;
+    transition: background-color 0.3s;
+  }
+  #overlay button:hover {
+    background-color: #0c0;
+  }
 </style>
 </head>
 <body>
-<div id="hud">
-  <span id="score">Puntaje: 0</span>
-  <span id="level">Nivel: 1</span>
-</div>
-<canvas id="gameCanvas" width="640" height="480"></canvas>
+  <div id="hud">
+    <span id="score">Puntaje: 0</span>
+    <span id="level">Nivel: 1</span>
+  </div>
+  <div id="record">Récord: 0</div>
+  <canvas id="gameCanvas" width="640" height="480"></canvas>
+
+  <div id="overlay" role="dialog" aria-modal="true" aria-live="assertive">
+    <div id="overlay-message"></div>
+    <button id="overlay-btn">Reiniciar</button>
+  </div>
+
 <script>
 (function() {
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
+
+  const scoreEl = document.getElementById("score");
+  const levelEl = document.getElementById("level");
+  const recordEl = document.getElementById("record");
+  const overlay = document.getElementById("overlay");
+  const overlayMsg = document.getElementById("overlay-message");
+  const overlayBtn = document.getElementById("overlay-btn");
 
   let score = 0;
   let level = 1;
@@ -79,6 +133,24 @@
 
   const brickColors = ["#e74c3c", "#f1c40f", "#2ecc71", "#3498db", "#9b59b6", "#e67e22", "#1abc9c", "#ecf0f1", "#e84393", "#2d3436"];
 
+  // Para efecto de destello cuando un ladrillo se rompe
+  let flashBricks = [];
+
+  // Sonidos simples con Web Audio API
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  function playSound(freq, duration=100) {
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = "square";
+    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration / 1000);
+  }
+
   function setupLevel() {
     brickRowCount = 3 + (level - 1);
     if (brickRowCount > brickColors.length) brickRowCount = brickColors.length;
@@ -87,6 +159,7 @@
     brickConfig.offsetLeft = (canvas.width - totalBrickWidth) / 2;
 
     bricks = [];
+    flashBricks = [];
     for (let r = 0; r < brickRowCount; r++) {
       bricks[r] = [];
       for (let c = 0; c < brickColCount; c++) {
@@ -99,19 +172,21 @@
     resetBall();
     paddle.x = (canvas.width - paddle.width) / 2;
 
-    document.getElementById("score").textContent = "Puntaje: " + score;
-    document.getElementById("level").textContent = "Nivel: " + level;
+    scoreEl.textContent = "Puntaje: " + score;
+    levelEl.textContent = "Nivel: " + level;
+    updateRecord();
 
     gameState = "playing";
+    overlay.style.display = "none";
   }
 
   function resetBall() {
     ball.x = canvas.width / 2;
     ball.y = canvas.height - 30;
-    ball.speed = level === 1 ? 3 : 2 + (level - 1) * 0.5;
-    // Al iniciar la bola va hacia arriba, dirección horizontal 0 (centrado)
-    ball.dx = 0;
-    ball.dy = -ball.speed;
+    ball.speed = 3 + (level - 1) * 0.5; // velocidad que crece con nivel
+    // Dirección aleatoria inicial horizontal, para no siempre ir recto arriba
+    ball.dx = (Math.random() * 2 - 1) * ball.speed;
+    ball.dy = -Math.sqrt(ball.speed*ball.speed - ball.dx*ball.dx);
   }
 
   function drawBall() {
@@ -143,6 +218,17 @@
         }
       }
     }
+    // Efecto flash para ladrillos rotos
+    flashBricks = flashBricks.filter(flash => {
+      flash.duration--;
+      if (flash.duration <= 0) return false;
+      ctx.beginPath();
+      ctx.rect(flash.x, flash.y, brickConfig.width, brickConfig.height);
+      ctx.fillStyle = `rgba(255,255,255,${flash.duration / 10})`;
+      ctx.fill();
+      ctx.closePath();
+      return true;
+    });
   }
 
   function collisionDetection() {
@@ -159,9 +245,23 @@
             ball.dy = -ball.dy;
             b.status = 0;
             score += 10;
-            document.getElementById("score").textContent = "Puntaje: " + score;
+            scoreEl.textContent = "Puntaje: " + score;
+            playSound(600, 80);
+            if (score > getRecord()) saveRecord(score);
+            flashBricks.push({ x: b.x, y: b.y, duration: 10 });
             if (isLevelCleared()) {
               gameState = "levelCompleted";
+              showOverlay("¡Nivel completado!", "Continuar", () => {
+                if (level < maxLevel) {
+                  level++;
+                } else {
+                  level = 1;
+                  score = 0;
+                }
+                setupLevel();
+                update();
+              });
+              playSound(900, 200);
             }
           }
         }
@@ -171,29 +271,37 @@
     // Rebote en paredes verticales
     if (ball.x + ball.dx > canvas.width - ball.radius || ball.x + ball.dx < ball.radius) {
       ball.dx = -ball.dx;
+      playSound(400, 60);
     }
     // Rebote en techo
     if (ball.y + ball.dy < ball.radius) {
       ball.dy = -ball.dy;
+      playSound(400, 60);
     }
     // Rebote en paddle
     else if (ball.y + ball.dy > canvas.height - ball.radius - paddle.height - 10) {
       if (ball.x > paddle.x && ball.x < paddle.x + paddle.width) {
-        // Calculamos dónde tocó respecto al centro del paddle
         const paddleCenter = paddle.x + paddle.width / 2;
         const distanceFromCenter = ball.x - paddleCenter;
-        const normalizedDistance = distanceFromCenter / (paddle.width / 2); // -1 (izq) a 1 (der)
-        const maxBounceAngle = Math.PI / 3; // 60 grados máximo
+        const normalizedDistance = distanceFromCenter / (paddle.width / 2);
+        const maxBounceAngle = Math.PI / 3;
 
         const bounceAngle = normalizedDistance * maxBounceAngle;
-        // Velocidad constante
         const speed = ball.speed;
 
-        // Cambiamos dx y dy según ángulo de rebote
         ball.dx = speed * Math.sin(bounceAngle);
         ball.dy = -speed * Math.cos(bounceAngle);
+
+        playSound(700, 80);
       } else if (ball.y + ball.dy > canvas.height - ball.radius) {
         gameState = "gameOver";
+        showOverlay("¡Juego terminado!", "Reiniciar", () => {
+          level = 1;
+          score = 0;
+          setupLevel();
+          update();
+        });
+        playSound(300, 500);
       }
     }
   }
@@ -225,51 +333,18 @@
       ball.y += ball.dy;
       collisionDetection();
     }
-
     draw();
-
     if (gameState === "playing") {
       requestAnimationFrame(update);
-    } else if (gameState === "levelCompleted") {
-      ctx.font = "20px 'Press Start 2P'";
-      ctx.fillStyle = "#0f0";
-      ctx.textAlign = "center";
-      ctx.fillText("¡Nivel completado!", canvas.width / 2, canvas.height / 2 - 20);
-      ctx.fillText("Presiona espacio para continuar", canvas.width / 2, canvas.height / 2 + 20);
-    } else if (gameState === "gameOver") {
-      ctx.font = "20px 'Press Start 2P'";
-      ctx.fillStyle = "#f00";
-      ctx.textAlign = "center";
-      ctx.fillText("¡Juego terminado!", canvas.width / 2, canvas.height / 2 - 20);
-      ctx.fillText("Presiona R para reiniciar", canvas.width / 2, canvas.height / 2 + 20);
     }
   }
 
+  // Manejo de teclado
   document.addEventListener("keydown", function(e) {
     if (e.code === "ArrowRight" || e.code === "KeyD") {
       paddle.movingRight = true;
     } else if (e.code === "ArrowLeft" || e.code === "KeyA") {
       paddle.movingLeft = true;
-    } else if (e.code === "Space") {
-      if (gameState === "levelCompleted") {
-        if (level < maxLevel) {
-          level++;
-          setupLevel();
-          update();
-        } else {
-          level = 1;
-          score = 0;
-          setupLevel();
-          update();
-        }
-      }
-    } else if (e.code === "KeyR") {
-      if (gameState === "gameOver") {
-        level = 1;
-        score = 0;
-        setupLevel();
-        update();
-      }
     }
   });
 
@@ -281,8 +356,51 @@
     }
   });
 
+  // Manejo con ratón (mover paddle horizontalmente)
+  canvas.addEventListener("mousemove", e => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    paddle.x = mouseX - paddle.width / 2;
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x > canvas.width - paddle.width) paddle.x = canvas.width - paddle.width;
+  });
+
+  // Manejo táctil
+  canvas.addEventListener("touchmove", e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    paddle.x = touchX - paddle.width / 2;
+    if (paddle.x < 0) paddle.x = 0;
+    if (paddle.x > canvas.width - paddle.width) paddle.x = canvas.width - paddle.width;
+  }, { passive: false });
+
+  // Overlay
+  function showOverlay(message, buttonText, callback) {
+    overlayMsg.textContent = message;
+    overlayBtn.textContent = buttonText;
+    overlay.style.display = "flex";
+    overlayBtn.onclick = () => {
+      overlay.style.display = "none";
+      callback();
+    };
+  }
+
+  // LocalStorage récord
+  function getRecord() {
+    return parseInt(localStorage.getItem("breakoutRecord")) || 0;
+  }
+  function saveRecord(newRecord) {
+    localStorage.setItem("breakoutRecord", newRecord);
+    updateRecord();
+  }
+  function updateRecord() {
+    recordEl.textContent = "Récord: " + getRecord();
+  }
+
   setupLevel();
   update();
+
 })();
 </script>
 <footer>bichigames</footer>
