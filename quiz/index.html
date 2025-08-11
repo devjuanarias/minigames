@@ -17,50 +17,60 @@
     justify-content: center;
     min-height: 100vh;
     padding: 1rem;
+    overflow-x: hidden;
   }
   #quiz-container {
     max-width: 480px;
     width: 100%;
     text-align: center;
+    position: relative;
   }
   h1 {
-    font-size: 2.8rem;
-    margin-bottom: 2rem;
+    font-size: 2rem; /* Achicado */
+    margin-bottom: 1.5rem;
     user-select: none;
+    letter-spacing: 2px;
   }
   #question {
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
-    min-height: 60px;
+    font-size: 1.3rem; /* Más grande para visibilidad */
+    margin-bottom: 2rem;
+    min-height: 80px;
+    padding: 0 10px;
+    color: #0f0;
+    text-shadow: 0 0 5px #0f0;
   }
   .btn {
-    background: transparent;
+    background: #002200cc; /* Fondo semitransparente para mejor contraste */
     border: 2px solid #0f0;
     color: #0f0;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 6px 0;
+    border-radius: 10px;
+    padding: 15px;
+    margin: 10px 0;
     cursor: pointer;
     width: 100%;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     user-select: none;
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 0 5px #0f0;
   }
   .btn:hover:not(:disabled),
   .btn:focus:not(:disabled) {
     background-color: #0f0;
     color: #000;
     outline: none;
+    box-shadow: 0 0 15px #0f0;
   }
   .btn.correct {
     background-color: #0f0;
     color: #000;
     cursor: default;
+    box-shadow: 0 0 20px 5px #fffb8f;
   }
   .btn.wrong {
     background-color: #f00;
     color: #000;
     cursor: default;
+    box-shadow: 0 0 20px 5px #ff6f6f;
   }
   .btn:disabled {
     cursor: default;
@@ -70,9 +80,9 @@
     background: transparent;
     border: 2px solid #0f0;
     color: #0f0;
-    font-size: 1rem;
-    padding: 10px 25px;
-    border-radius: 8px;
+    font-size: 1.1rem;
+    padding: 12px 30px;
+    border-radius: 10px;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.3s, color 0.3s;
@@ -89,21 +99,70 @@
   }
   #score-container {
     margin-top: 2rem;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     user-select: none;
+  }
+  /* Efecto flash para toda la pantalla */
+  @keyframes flash-yellow {
+    0% { background-color: transparent; }
+    50% { background-color: #fff9b0; }
+    100% { background-color: transparent; }
+  }
+  @keyframes flash-red {
+    0% { background-color: transparent; }
+    50% { background-color: #ff5555; }
+    100% { background-color: transparent; }
+  }
+  .flash-yellow {
+    animation: flash-yellow 0.4s ease forwards;
+  }
+  .flash-red {
+    animation: flash-red 0.4s ease forwards;
+  }
+  /* Estrellitas animadas */
+  .star {
+    position: fixed;
+    width: 10px;
+    height: 10px;
+    background: radial-gradient(circle, #fffacd 60%, transparent 70%);
+    border-radius: 50%;
+    filter: drop-shadow(0 0 3px #ffeb3b);
+    opacity: 0.9;
+    animation: star-fall 0.8s linear forwards;
+    pointer-events: none;
+    z-index: 9999;
+  }
+  @keyframes star-fall {
+    0% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(80px) scale(0.3);
+      opacity: 0;
+    }
   }
   @media (max-width: 480px) {
     h1 {
-      font-size: 1.8rem;
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+    }
+    #question {
+      font-size: 1.1rem;
+      min-height: 60px;
       margin-bottom: 1.5rem;
     }
     .btn {
-      font-size: 0.8rem;
-      padding: 10px;
+      font-size: 1rem;
+      padding: 12px;
+      margin: 8px 0;
     }
     #next-btn {
-      font-size: 0.9rem;
-      padding: 8px 20px;
+      font-size: 1rem;
+      padding: 10px 25px;
+    }
+    #score-container {
+      font-size: 1.1rem;
     }
   }
 </style>
@@ -122,16 +181,26 @@
   const answerButtons = document.getElementById("answer-buttons");
   const nextBtn = document.getElementById("next-btn");
   const scoreContainer = document.getElementById("score-container");
+  const body = document.body;
 
   let questions = [];
   let currentQuestionIndex = 0;
-  let score = 0;
+  let correctCount = 0;
+  let wrongCount = 0;
+
+  function shuffleArray(array) {
+    for(let i = array.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
 
   async function loadQuestions() {
     try {
       const response = await fetch('questions.json');
       if (!response.ok) throw new Error("Error cargando preguntas");
       questions = await response.json();
+      shuffleArray(questions);
       startQuiz();
     } catch (error) {
       questionElement.innerText = "No se pudieron cargar las preguntas.";
@@ -141,7 +210,8 @@
 
   function startQuiz() {
     currentQuestionIndex = 0;
-    score = 0;
+    correctCount = 0;
+    wrongCount = 0;
     scoreContainer.innerText = "";
     nextBtn.innerText = "Próxima";
     showQuestion();
@@ -169,15 +239,46 @@
     }
   }
 
+  function createStar(x, y) {
+    const star = document.createElement("div");
+    star.classList.add("star");
+    star.style.left = `${x}px`;
+    star.style.top = `${y}px`;
+    document.body.appendChild(star);
+    setTimeout(() => {
+      star.remove();
+    }, 800);
+  }
+
+  function flashScreen(colorClass) {
+    body.classList.add(colorClass);
+    setTimeout(() => {
+      body.classList.remove(colorClass);
+    }, 400);
+  }
+
+  function showStars() {
+    for(let i = 0; i < 8; i++){
+      // Posición random en zona central
+      const x = window.innerWidth / 2 + (Math.random() - 0.5) * 200;
+      const y = window.innerHeight / 2 + (Math.random() - 0.5) * 100;
+      createStar(x, y);
+    }
+  }
+
   function selectAnswer(e) {
     const selectedBtn = e.target;
     const correct = selectedBtn.dataset.correct === "true";
 
     if (correct) {
       selectedBtn.classList.add("correct");
-      score++;
+      correctCount++;
+      flashScreen('flash-yellow');
+      showStars();
     } else {
       selectedBtn.classList.add("wrong");
+      wrongCount++;
+      flashScreen('flash-red');
       // Mostrar cuál era la correcta
       Array.from(answerButtons.children).forEach(btn => {
         if (btn.dataset.correct === "true") {
@@ -203,7 +304,7 @@
   function showScore() {
     resetState();
     questionElement.innerText = "¡Juego terminado!";
-    scoreContainer.innerText = `Obtuviste ${score} de ${questions.length} puntos.`;
+    scoreContainer.innerText = `Correctas: ${correctCount} | Incorrectas: ${wrongCount}`;
     nextBtn.innerText = "Volver a jugar";
     nextBtn.disabled = false;
     nextBtn.onclick = () => {
@@ -217,4 +318,3 @@
 </script>
 </body>
 </html>
-
