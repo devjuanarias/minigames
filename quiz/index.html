@@ -26,13 +26,13 @@
     position: relative;
   }
   h1 {
-    font-size: 2rem; /* Achicado */
+    font-size: 2rem;
     margin-bottom: 1.5rem;
     user-select: none;
     letter-spacing: 2px;
   }
   #question {
-    font-size: 1.3rem; /* Más grande para visibilidad */
+    font-size: 1.3rem;
     margin-bottom: 2rem;
     min-height: 80px;
     padding: 0 10px;
@@ -40,7 +40,7 @@
     text-shadow: 0 0 5px #0f0;
   }
   .btn {
-    background: #002200cc; /* Fondo semitransparente para mejor contraste */
+    background: #002200cc;
     border: 2px solid #0f0;
     color: #0f0;
     border-radius: 10px;
@@ -52,6 +52,8 @@
     user-select: none;
     transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
     box-shadow: 0 0 5px #0f0;
+    position: relative;
+    overflow: visible;
   }
   .btn:hover:not(:disabled),
   .btn:focus:not(:disabled) {
@@ -102,45 +104,38 @@
     font-size: 1.3rem;
     user-select: none;
   }
-  /* Efecto flash para toda la pantalla */
-  @keyframes flash-yellow {
-    0% { background-color: transparent; }
-    50% { background-color: #fff9b0; }
-    100% { background-color: transparent; }
-  }
-  @keyframes flash-red {
-    0% { background-color: transparent; }
-    50% { background-color: #ff5555; }
-    100% { background-color: transparent; }
-  }
-  .flash-yellow {
-    animation: flash-yellow 0.4s ease forwards;
-  }
-  .flash-red {
-    animation: flash-red 0.4s ease forwards;
-  }
-  /* Estrellitas animadas */
-  .star {
-    position: fixed;
-    width: 10px;
-    height: 10px;
-    background: radial-gradient(circle, #fffacd 60%, transparent 70%);
-    border-radius: 50%;
-    filter: drop-shadow(0 0 3px #ffeb3b);
-    opacity: 0.9;
-    animation: star-fall 0.8s linear forwards;
+  /* Iconos correctos/incorrectos */
+  .icon-feedback {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    font-size: 1.6rem;
     pointer-events: none;
-    z-index: 9999;
+    user-select: none;
+    opacity: 0;
+    transition: transform 0.4s ease, opacity 0.4s ease;
   }
-  @keyframes star-fall {
+  .icon-feedback.show {
+    transform: translateY(-50%) scale(1.3);
+    opacity: 1;
+    animation: zoomFade 1s forwards;
+  }
+  @keyframes zoomFade {
     0% {
-      transform: translateY(0) scale(1);
+      transform: translateY(-50%) scale(1.3);
       opacity: 1;
     }
     100% {
-      transform: translateY(80px) scale(0.3);
+      transform: translateY(-50%) scale(1);
       opacity: 0;
     }
+  }
+  .icon-correct {
+    color: #0f0;
+  }
+  .icon-wrong {
+    color: #f00;
   }
   @media (max-width: 480px) {
     h1 {
@@ -181,7 +176,6 @@
   const answerButtons = document.getElementById("answer-buttons");
   const nextBtn = document.getElementById("next-btn");
   const scoreContainer = document.getElementById("score-container");
-  const body = document.body;
 
   let questions = [];
   let currentQuestionIndex = 0;
@@ -228,6 +222,14 @@
       button.classList.add("btn");
       button.dataset.correct = answer.correct;
       button.addEventListener("click", selectAnswer);
+
+      // Crear icono feedback invisible
+      const icon = document.createElement("span");
+      icon.classList.add("icon-feedback");
+      icon.innerHTML = answer.correct ? "&#10004;" : "&#10006;"; // ✓ o ✗
+      icon.classList.add(answer.correct ? "icon-correct" : "icon-wrong");
+      button.appendChild(icon);
+
       answerButtons.appendChild(button);
     });
   }
@@ -239,53 +241,37 @@
     }
   }
 
-  function createStar(x, y) {
-    const star = document.createElement("div");
-    star.classList.add("star");
-    star.style.left = `${x}px`;
-    star.style.top = `${y}px`;
-    document.body.appendChild(star);
+  function animateIcon(icon) {
+    icon.classList.add("show");
     setTimeout(() => {
-      star.remove();
-    }, 800);
-  }
-
-  function flashScreen(colorClass) {
-    body.classList.add(colorClass);
-    setTimeout(() => {
-      body.classList.remove(colorClass);
-    }, 400);
-  }
-
-  function showStars() {
-    for(let i = 0; i < 8; i++){
-      // Posición random en zona central
-      const x = window.innerWidth / 2 + (Math.random() - 0.5) * 200;
-      const y = window.innerHeight / 2 + (Math.random() - 0.5) * 100;
-      createStar(x, y);
-    }
+      icon.classList.remove("show");
+    }, 1000);
   }
 
   function selectAnswer(e) {
-    const selectedBtn = e.target;
+    const selectedBtn = e.target.closest("button");
     const correct = selectedBtn.dataset.correct === "true";
 
     if (correct) {
       selectedBtn.classList.add("correct");
       correctCount++;
-      flashScreen('flash-yellow');
-      showStars();
     } else {
       selectedBtn.classList.add("wrong");
       wrongCount++;
-      flashScreen('flash-red');
       // Mostrar cuál era la correcta
       Array.from(answerButtons.children).forEach(btn => {
         if (btn.dataset.correct === "true") {
           btn.classList.add("correct");
+          // Animar icono correcta
+          const icon = btn.querySelector(".icon-feedback");
+          if (icon) animateIcon(icon);
         }
       });
     }
+    // Animar icono seleccionado
+    const iconSelected = selectedBtn.querySelector(".icon-feedback");
+    if (iconSelected) animateIcon(iconSelected);
+
     Array.from(answerButtons.children).forEach(btn => {
       btn.disabled = true;
     });
