@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>BichiGames</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Press Start 2P', cursive;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+  }
+  h1 {
+    font-size: 3rem;
+    margin-bottom: 40px;
+    user-select: none;
+  }
+  a.game-link {
+    text-decoration: none;
+    color: #0f0;
+    border: 2px solid #0f0;
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    border-radius: 8px;
+    transition: background-color 0.3s, color 0.3s;
+    user-select: none;
+  }
+  a.game-link:hover,
+  a.game-link:focus {
+    background-color: #0f0;
+    color: #000;
+    outline: none;
+  }
+  @media (max-width: 480px) {
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 30px;
+    }
+    a.game-link {
+      padding: 12px 24px;
+      font-size: 1rem;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>BichiGames</h1>
+  <a href="breakout/index.html" class="game-link" aria-label="Jugar Breakout">Jugar Breakout</a>
+</body>
+</html>
