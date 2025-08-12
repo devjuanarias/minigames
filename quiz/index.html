@@ -6,104 +6,189 @@
 <title>BichiGames Quiz - Países y Capitales</title>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
 <style>
+  /* Variables de colores para modo claro y oscuro */
+  :root {
+    --bg-light: #fefefe;
+    --text-light: #222;
+    --btn-bg-light: #e0e0e0;
+    --btn-border-light: #999;
+    --btn-hover-bg-light: #c0c0c0;
+    --btn-correct-light: #4caf50;
+    --btn-wrong-light: #f44336;
+    
+    --bg-dark: #121212;
+    --text-dark: #e0e0e0;
+    --btn-bg-dark: #1e1e1e;
+    --btn-border-dark: #4caf50;
+    --btn-hover-bg-dark: #4caf50;
+    --btn-correct-dark: #81c784;
+    --btn-wrong-dark: #e57373;
+  }
+
   body {
-    background-color: #000;
-    color: #0f0;
-    font-family: 'Press Start 2P', cursive;
     margin: 0;
+    padding: 1rem;
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-light);
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     min-height: 100vh;
-    padding: 1rem;
+    transition: background-color 0.5s ease, color 0.5s ease;
     overflow-x: hidden;
   }
+
+  /* Modo oscuro */
+  body.dark {
+    background-color: var(--bg-dark);
+    color: var(--text-dark);
+  }
+
   #quiz-container {
     max-width: 480px;
     width: 100%;
     text-align: center;
     position: relative;
   }
+
   h1 {
-    font-size: 2rem;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 2.2rem;
     margin-bottom: 1.5rem;
     user-select: none;
     letter-spacing: 2px;
+    color: #4caf50;
+    text-shadow: 0 0 8px #4caf50;
   }
+
   #question {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     margin-bottom: 2rem;
     min-height: 80px;
     padding: 0 10px;
-    color: #0f0;
-    text-shadow: 0 0 5px #0f0;
+    border-radius: 8px;
+    background-color: var(--btn-bg-light);
+    color: var(--text-light);
+    box-shadow: 0 0 6px rgba(0,0,0,0.1);
+    transition: background-color 0.5s ease, color 0.5s ease;
   }
+  body.dark #question {
+    background-color: var(--btn-bg-dark);
+    color: var(--text-dark);
+    box-shadow: 0 0 10px #4caf50;
+  }
+
   .btn {
-    background: #002200cc;
-    border: 2px solid #0f0;
-    color: #0f0;
-    border-radius: 10px;
-    padding: 15px;
+    background: var(--btn-bg-light);
+    border: 2px solid var(--btn-border-light);
+    color: var(--text-light);
+    border-radius: 12px;
+    padding: 14px;
     margin: 10px 0;
     cursor: pointer;
     width: 100%;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     user-select: none;
-    transition: background-color 0.3s, color 0.3s, box-shadow 0.3s;
-    box-shadow: 0 0 5px #0f0;
+    transition: background-color 0.3s, color 0.3s, box-shadow 0.3s, border-color 0.3s;
     position: relative;
-    overflow: visible;
   }
+  body.dark .btn {
+    background: var(--btn-bg-dark);
+    border-color: var(--btn-border-dark);
+    color: var(--text-dark);
+  }
+
   .btn:hover:not(:disabled),
   .btn:focus:not(:disabled) {
-    background-color: #0f0;
-    color: #000;
+    background-color: var(--btn-hover-bg-light);
+    border-color: #4caf50;
+    color: var(--text-light);
     outline: none;
-    box-shadow: 0 0 15px #0f0;
+    box-shadow: 0 0 8px #4caf50;
   }
+  body.dark .btn:hover:not(:disabled),
+  body.dark .btn:focus:not(:disabled) {
+    background-color: var(--btn-hover-bg-dark);
+    color: #121212;
+    border-color: #81c784;
+    box-shadow: 0 0 10px #81c784;
+  }
+
   .btn.correct {
-    background-color: #0f0;
-    color: #000;
+    background-color: var(--btn-correct-light);
+    color: #fff;
     cursor: default;
-    box-shadow: 0 0 20px 5px #fffb8f;
+    box-shadow: 0 0 15px #4caf50;
+    border-color: #388e3c;
   }
+  body.dark .btn.correct {
+    background-color: var(--btn-correct-dark);
+    color: #121212;
+    border-color: #2e7d32;
+    box-shadow: 0 0 20px #81c784;
+  }
+
   .btn.wrong {
-    background-color: #f00;
-    color: #000;
+    background-color: var(--btn-wrong-light);
+    color: #fff;
     cursor: default;
-    box-shadow: 0 0 20px 5px #ff6f6f;
+    box-shadow: 0 0 15px #f44336;
+    border-color: #d32f2f;
   }
+  body.dark .btn.wrong {
+    background-color: var(--btn-wrong-dark);
+    color: #121212;
+    border-color: #c62828;
+    box-shadow: 0 0 20px #e57373;
+  }
+
   .btn:disabled {
     cursor: default;
+    opacity: 0.7;
   }
+
   #next-btn {
     margin-top: 2rem;
     background: transparent;
-    border: 2px solid #0f0;
-    color: #0f0;
-    font-size: 1.1rem;
-    padding: 12px 30px;
-    border-radius: 10px;
+    border: 2px solid var(--btn-border-light);
+    color: var(--text-light);
+    font-size: 1.2rem;
+    padding: 14px 30px;
+    border-radius: 12px;
     cursor: pointer;
     user-select: none;
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+  }
+  body.dark #next-btn {
+    border-color: var(--btn-border-dark);
+    color: var(--text-dark);
   }
   #next-btn:hover:not(:disabled),
   #next-btn:focus:not(:disabled) {
-    background-color: #0f0;
-    color: #000;
+    background-color: #4caf50;
+    color: #fff;
+    border-color: #388e3c;
     outline: none;
+  }
+  body.dark #next-btn:hover:not(:disabled),
+  body.dark #next-btn:focus:not(:disabled) {
+    background-color: #81c784;
+    color: #121212;
+    border-color: #2e7d32;
   }
   #next-btn:disabled {
     opacity: 0.5;
     cursor: default;
   }
+
   #score-container {
     margin-top: 2rem;
     font-size: 1.3rem;
     user-select: none;
+    min-height: 1.5rem;
   }
+
   /* Iconos correctos/incorrectos */
   .icon-feedback {
     position: absolute;
@@ -132,18 +217,38 @@
     }
   }
   .icon-correct {
-    color: #0f0;
+    color: #4caf50;
   }
   .icon-wrong {
-    color: #f00;
+    color: #f44336;
   }
+
+  /* Botón toggle modo claro/oscuro */
+  #toggle-theme {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.8rem;
+    user-select: none;
+    color: #4caf50;
+    transition: color 0.3s ease;
+    z-index: 999;
+  }
+  #toggle-theme:hover {
+    color: #388e3c;
+  }
+
+  /* Responsive */
   @media (max-width: 480px) {
     h1 {
       font-size: 1.6rem;
       margin-bottom: 1rem;
     }
     #question {
-      font-size: 1.1rem;
+      font-size: 1.2rem;
       min-height: 60px;
       margin-bottom: 1.5rem;
     }
@@ -154,15 +259,19 @@
     }
     #next-btn {
       font-size: 1rem;
-      padding: 10px 25px;
+      padding: 12px 25px;
     }
     #score-container {
       font-size: 1.1rem;
+    }
+    #toggle-theme {
+      font-size: 1.5rem;
     }
   }
 </style>
 </head>
 <body>
+  <button id="toggle-theme" aria-label="Cambiar tema" title="Cambiar tema">🌞</button>
   <div id="quiz-container" role="main" aria-label="Quiz de países y capitales">
     <h1>BichiGames Quiz</h1>
     <div id="question" tabindex="0">Cargando preguntas...</div>
@@ -176,11 +285,27 @@
   const answerButtons = document.getElementById("answer-buttons");
   const nextBtn = document.getElementById("next-btn");
   const scoreContainer = document.getElementById("score-container");
+  const toggleThemeBtn = document.getElementById("toggle-theme");
 
   let questions = [];
   let currentQuestionIndex = 0;
   let correctCount = 0;
   let wrongCount = 0;
+
+  // Carga modo guardado o default light
+  const savedTheme = localStorage.getItem("theme") || "light";
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark");
+    toggleThemeBtn.textContent = "🌙";
+  } else {
+    toggleThemeBtn.textContent = "🌞";
+  }
+
+  toggleThemeBtn.addEventListener("click", () => {
+    const isDark = document.body.classList.toggle("dark");
+    toggleThemeBtn.textContent = isDark ? "🌙" : "🌞";
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  });
 
   function shuffleArray(array) {
     for(let i = array.length - 1; i > 0; i--){
@@ -195,6 +320,8 @@
       if (!response.ok) throw new Error("Error cargando preguntas");
       questions = await response.json();
       shuffleArray(questions);
+      // Mezclar respuestas de cada pregunta
+      questions.forEach(q => shuffleArray(q.answers));
       startQuiz();
     } catch (error) {
       questionElement.innerText = "No se pudieron cargar las preguntas.";
@@ -208,6 +335,7 @@
     wrongCount = 0;
     scoreContainer.innerText = "";
     nextBtn.innerText = "Próxima";
+    nextBtn.disabled = true;
     showQuestion();
   }
 
@@ -223,7 +351,7 @@
       button.dataset.correct = answer.correct;
       button.addEventListener("click", selectAnswer);
 
-      // Crear icono feedback invisible
+      // Icono feedback oculto inicialmente
       const icon = document.createElement("span");
       icon.classList.add("icon-feedback");
       icon.innerHTML = answer.correct ? "&#10004;" : "&#10006;"; // ✓ o ✗
@@ -262,13 +390,11 @@
       Array.from(answerButtons.children).forEach(btn => {
         if (btn.dataset.correct === "true") {
           btn.classList.add("correct");
-          // Animar icono correcta
           const icon = btn.querySelector(".icon-feedback");
           if (icon) animateIcon(icon);
         }
       });
     }
-    // Animar icono seleccionado
     const iconSelected = selectedBtn.querySelector(".icon-feedback");
     if (iconSelected) animateIcon(iconSelected);
 
@@ -276,6 +402,7 @@
       btn.disabled = true;
     });
     nextBtn.disabled = false;
+    nextBtn.focus();
   }
 
   nextBtn.addEventListener("click", () => {
@@ -298,6 +425,7 @@
       scoreContainer.innerText = "";
       nextBtn.onclick = null;
     };
+    nextBtn.focus();
   }
 
   loadQuestions();
